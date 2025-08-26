@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -51,6 +52,7 @@ class LanguageConfig:
     class_node_types: list[str]
     module_node_types: list[str]
     call_node_types: list[str] = field(default_factory=list)
+    attribute_node_types: list[str] = field(default_factory=list)
 
     # Import statement node types for precise import resolution
     import_node_types: list[str] = field(default_factory=list)
@@ -85,6 +87,7 @@ LANGUAGE_CONFIGS = {
         class_node_types=["class_definition"],
         module_node_types=["module"],
         call_node_types=["call", "with_statement"],
+        attribute_node_types=["assignment", "expression_statement"],
         import_node_types=["import_statement"],
         import_from_node_types=["import_from_statement"],
         package_indicators=["__init__.py"],
@@ -95,6 +98,7 @@ LANGUAGE_CONFIGS = {
         class_node_types=COMMON_JS_TS_CLASSES,
         module_node_types=["program"],
         call_node_types=["call_expression"],
+        attribute_node_types=["field_definition", "property_identifier"],
         import_node_types=COMMON_JS_TS_IMPORTS,
         import_from_node_types=COMMON_JS_TS_IMPORTS,  # Include CommonJS require and re-exports
     ),
@@ -112,6 +116,7 @@ LANGUAGE_CONFIGS = {
         ],
         module_node_types=["program"],
         call_node_types=["call_expression"],
+        attribute_node_types=["field_definition", "property_signature", "property_identifier"],
         import_node_types=COMMON_JS_TS_IMPORTS,
         import_from_node_types=COMMON_JS_TS_IMPORTS,  # Include CommonJS require and re-exports
     ),
@@ -138,6 +143,7 @@ LANGUAGE_CONFIGS = {
             "call_expression",  # Function and method calls
             "macro_invocation",  # Macro calls: println!()
         ],
+        attribute_node_types=["field_declaration_list", "field_declaration"],
         import_node_types=["use_declaration", "extern_crate_declaration"],
         import_from_node_types=["use_declaration"],  # Rust uses 'use' for all imports
         package_indicators=["Cargo.toml"],  # Rust's package manifest
@@ -225,6 +231,7 @@ LANGUAGE_CONFIGS = {
         module_node_types=["program"],
         package_indicators=[],  # Java uses package declarations
         call_node_types=["method_invocation"],
+        attribute_node_types=["field_declaration"],
         import_node_types=COMMON_DECLARATION_IMPORT,
         import_from_node_types=COMMON_DECLARATION_IMPORT,  # Java uses same node for imports
         # Pre-formatted Tree-sitter queries for comprehensive Java parsing
@@ -295,6 +302,7 @@ LANGUAGE_CONFIGS = {
             "unary_expression",  # For unary operators like ++obj
             "update_expression",  # For prefix/postfix increment/decrement
         ],
+        attribute_node_types=["field_declaration"],
         import_node_types=CPP_IMPORTS,
         import_from_node_types=CPP_IMPORTS,
         # C++ specific configurations

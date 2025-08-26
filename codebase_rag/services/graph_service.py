@@ -24,6 +24,7 @@ class MemgraphIngestor:
             "Class": "qualified_name",
             "Function": "qualified_name",
             "Method": "qualified_name",
+            "Attribute": "qualified_name",
             "File": "path",
             "ExternalPackage": "name",
         }

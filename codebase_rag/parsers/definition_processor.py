@@ -1167,6 +1167,9 @@ class DefinitionProcessor:
                         node_type, class_qn, interface_qn
                     )
 
+            # Extract and ingest class attributes
+            self._ingest_class_attributes(class_node, class_qn, node_type, language, queries)
+
             body_node = class_node.child_by_field_name("body")
             if not body_node:
                 continue
@@ -2609,3 +2612,253 @@ class DefinitionProcessor:
             "IMPLEMENTS",
             ("Interface", "qualified_name", interface_qn),
         )
+
+    def _ingest_class_attributes(
+        self, class_node: Node, class_qn: str, class_node_type: str, language: str, queries: dict[str, Any]
+    ) -> None:
+        """Extract and ingest class attributes/fields."""
+        lang_queries = queries[language]
+        attributes_query = lang_queries.get("attributes")
+        
+        if not attributes_query:
+            return
+            
+        body_node = class_node.child_by_field_name("body")
+        if not body_node:
+            return
+            
+        from tree_sitter import QueryCursor
+        cursor = QueryCursor(attributes_query)
+        captures = cursor.captures(body_node)
+        attribute_nodes = captures.get("attribute", [])
+        
+        for attribute_node in attribute_nodes:
+            if not isinstance(attribute_node, Node):
+                continue
+                
+            # Extract attribute information based on language
+            attribute_info = self._extract_attribute_info(attribute_node, language)
+            
+            if not attribute_info or not attribute_info.get("name"):
+                continue
+                
+            attr_name = attribute_info["name"]
+            attr_qn = f"{class_qn}.{attr_name}"
+            
+            # Create attribute node properties
+            attr_props = {
+                "qualified_name": attr_qn,
+                "name": attr_name,
+                "type": attribute_info.get("type", "unknown"),
+                "visibility": attribute_info.get("visibility", "private"),
+                "is_static": attribute_info.get("is_static", False),
+                "is_final": attribute_info.get("is_final", False),
+                "start_line": attribute_node.start_point[0] + 1,
+                "end_line": attribute_node.end_point[0] + 1,
+            }
+            
+            # Add modifiers for Java
+            if language == "java":
+                attr_props["modifiers"] = attribute_info.get("modifiers", [])
+                attr_props["annotations"] = attribute_info.get("annotations", [])
+            
+            # Create attribute node
+            self.ingestor.ensure_node_batch("Attribute", attr_props)
+            
+            # Create HAS_ATTRIBUTE relationship
+            self.ingestor.ensure_relationship_batch(
+                (class_node_type, "qualified_name", class_qn),
+                "HAS_ATTRIBUTE",
+                ("Attribute", "qualified_name", attr_qn),
+            )
+            
+            logger.debug(f"  Found Attribute: {attr_name} in {class_qn}")
+    
+    def _extract_attribute_info(self, attribute_node: Node, language: str) -> dict[str, Any]:
+        """Extract attribute information based on the language."""
+        if language == "java":
+            # Use existing Java field extraction logic
+            from .java_utils import extract_java_field_info
+            field_info = extract_java_field_info(attribute_node)
+            return {
+                "name": field_info.get("name"),
+                "type": field_info.get("type"),
+                "modifiers": field_info.get("modifiers", []),
+                "annotations": field_info.get("annotations", []),
+                "visibility": self._determine_visibility_from_modifiers(field_info.get("modifiers", [])),
+                "is_static": "static" in field_info.get("modifiers", []),
+                "is_final": "final" in field_info.get("modifiers", []),
+            }
+        elif language == "python":
+            return self._extract_python_attribute_info(attribute_node)
+        elif language in ["javascript", "typescript"]:
+            return self._extract_js_ts_attribute_info(attribute_node)
+        elif language == "cpp":
+            return self._extract_cpp_attribute_info(attribute_node)
+        elif language == "rust":
+            return self._extract_rust_attribute_info(attribute_node)
+        else:
+            # Generic extraction for other languages
+            return self._extract_generic_attribute_info(attribute_node)
+    
+    def _determine_visibility_from_modifiers(self, modifiers: list[str]) -> str:
+        """Determine visibility from Java modifiers."""
+        if "public" in modifiers:
+            return "public"
+        elif "protected" in modifiers:
+            return "protected"
+        elif "private" in modifiers:
+            return "private"
+        else:
+            return "package"  # package-private in Java
+    
+    def _extract_python_attribute_info(self, attribute_node: Node) -> dict[str, Any]:
+        """Extract Python class attribute information."""
+        if attribute_node.type == "assignment":
+            # Look for self.attribute = value patterns
+            left_side = attribute_node.child_by_field_name("left")
+            if left_side and left_side.type == "attribute":
+                object_node = left_side.child_by_field_name("object")
+                attr_name_node = left_side.child_by_field_name("attribute")
+                
+                if (object_node and object_node.text and object_node.text.decode("utf-8") == "self" and
+                    attr_name_node and attr_name_node.text):
+                    
+                    attr_name = attr_name_node.text.decode("utf-8")
+                    right_side = attribute_node.child_by_field_name("right")
+                    attr_type = "unknown"
+                    
+                    # Try to infer type from right side
+                    if right_side and right_side.text:
+                        right_text = right_side.text.decode("utf-8")
+                        if right_text.startswith('"') or right_text.startswith("'"):
+                            attr_type = "str"
+                        elif right_text.isdigit():
+                            attr_type = "int"
+                        elif right_text in ["True", "False"]:
+                            attr_type = "bool"
+                        elif right_text.startswith("["):
+                            attr_type = "list"
+                        elif right_text.startswith("{"):
+                            attr_type = "dict"
+                    
+                    # Determine visibility by naming convention
+                    visibility = "private" if attr_name.startswith("_") else "public"
+                    
+                    return {
+                        "name": attr_name,
+                        "type": attr_type,
+                        "visibility": visibility,
+                        "is_static": False,
+                        "is_final": False,
+                    }
+        
+        return {}
+    
+    def _extract_js_ts_attribute_info(self, attribute_node: Node) -> dict[str, Any]:
+        """Extract JavaScript/TypeScript class attribute information."""
+        if attribute_node.type == "field_definition":
+            name_node = attribute_node.child_by_field_name("property")
+            type_annotation = attribute_node.child_by_field_name("type")
+            
+            if name_node and name_node.text:
+                attr_name = name_node.text.decode("utf-8")
+                attr_type = "unknown"
+                
+                if type_annotation and type_annotation.text:
+                    attr_type = type_annotation.text.decode("utf-8")
+                
+                # Check for modifiers
+                is_static = False
+                visibility = "public"  # JavaScript defaults to public
+                
+                for child in attribute_node.children:
+                    if child.type == "accessibility_modifier":
+                        visibility = child.text.decode("utf-8") if child.text else "public"
+                    elif child.type == "static":
+                        is_static = True
+                
+                return {
+                    "name": attr_name,
+                    "type": attr_type,
+                    "visibility": visibility,
+                    "is_static": is_static,
+                    "is_final": False,
+                }
+        
+        return {}
+    
+    def _extract_cpp_attribute_info(self, attribute_node: Node) -> dict[str, Any]:
+        """Extract C++ class attribute information."""
+        if attribute_node.type == "field_declaration":
+            # Find the declarator to get the name
+            declarator = None
+            type_node = None
+            
+            for child in attribute_node.children:
+                if child.type in ["field_identifier", "identifier"]:
+                    declarator = child
+                elif "type" in child.type or child.type in ["primitive_type", "type_identifier"]:
+                    type_node = child
+            
+            if declarator and declarator.text:
+                attr_name = declarator.text.decode("utf-8")
+                attr_type = "unknown"
+                
+                if type_node and type_node.text:
+                    attr_type = type_node.text.decode("utf-8")
+                
+                # Default to private for C++ class members
+                visibility = "private"
+                
+                return {
+                    "name": attr_name,
+                    "type": attr_type,
+                    "visibility": visibility,
+                    "is_static": False,
+                    "is_final": False,
+                }
+        
+        return {}
+    
+    def _extract_rust_attribute_info(self, attribute_node: Node) -> dict[str, Any]:
+        """Extract Rust struct field information."""
+        if attribute_node.type == "field_declaration":
+            name_node = attribute_node.child_by_field_name("name")
+            type_node = attribute_node.child_by_field_name("type")
+            
+            if name_node and name_node.text:
+                attr_name = name_node.text.decode("utf-8")
+                attr_type = "unknown"
+                
+                if type_node and type_node.text:
+                    attr_type = type_node.text.decode("utf-8")
+                
+                # Rust struct fields are private by default, pub makes them public
+                visibility = "public" if "pub" in attribute_node.text.decode("utf-8") else "private"
+                
+                return {
+                    "name": attr_name,
+                    "type": attr_type,
+                    "visibility": visibility,
+                    "is_static": False,
+                    "is_final": False,
+                }
+        
+        return {}
+    
+    def _extract_generic_attribute_info(self, attribute_node: Node) -> dict[str, Any]:
+        """Generic attribute extraction for unsupported languages."""
+        # Try to find identifier nodes that could be attribute names
+        for child in attribute_node.children:
+            if child.type == "identifier" and child.text:
+                attr_name = child.text.decode("utf-8")
+                return {
+                    "name": attr_name,
+                    "type": "unknown",
+                    "visibility": "public",
+                    "is_static": False,
+                    "is_final": False,
+                }
+        
+        return {}
