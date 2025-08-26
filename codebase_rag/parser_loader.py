@@ -214,6 +214,12 @@ def load_parsers() -> tuple[dict[str, Parser], dict[str, Any]]:
                         ]
                     )
                 )
+                attribute_patterns = " ".join(
+                    [
+                        f"({node_type}) @attribute"
+                        for node_type in lang_config.attribute_node_types
+                    ]
+                )
 
                 # Create import query patterns
                 import_patterns = " ".join(
@@ -290,6 +296,9 @@ def load_parsers() -> tuple[dict[str, Parser], dict[str, Any]]:
                         Query(language, class_patterns) if class_patterns else None
                     ),
                     "calls": Query(language, call_patterns) if call_patterns else None,
+                    "attributes": (
+                        Query(language, attribute_patterns) if attribute_patterns else None
+                    ),
                     "imports": (
                         Query(language, combined_import_patterns)
                         if combined_import_patterns
