@@ -2,11 +2,13 @@ from typing import cast
 
 from loguru import logger
 from pydantic_ai import Agent, Tool
+from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.gemini import GeminiModel, GeminiModelSettings
 from pydantic_ai.models.openai import (
     OpenAIModel,
     OpenAIResponsesModel,
 )
+from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.google_gla import GoogleGLAProvider
 from pydantic_ai.providers.google_vertex import GoogleVertexProvider, VertexAiRegion
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -47,7 +49,13 @@ class CypherGenerator:
             cypher_provider = detect_provider_from_model(cypher_model_id)
 
             # Configure model based on detected provider
-            if cypher_provider == "gemini":
+            if cypher_provider == "anthropic":
+                llm = AnthropicModel(
+                    cypher_model_id,
+                    provider=AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY),  # type: ignore
+                )
+                system_prompt = CYPHER_SYSTEM_PROMPT
+            elif cypher_provider == "gemini":
                 if settings.GEMINI_PROVIDER == "vertex":
                     provider = GoogleVertexProvider(
                         project_id=settings.GCP_PROJECT_ID,
@@ -128,7 +136,12 @@ def create_rag_orchestrator(tools: list[Tool]) -> Agent:
         orchestrator_model_id = settings.active_orchestrator_model
         orchestrator_provider = detect_provider_from_model(orchestrator_model_id)
 
-        if orchestrator_provider == "gemini":
+        if orchestrator_provider == "anthropic":
+            llm = AnthropicModel(
+                orchestrator_model_id,
+                provider=AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY),  # type: ignore
+            )
+        elif orchestrator_provider == "gemini":
             if settings.GEMINI_PROVIDER == "vertex":
                 provider = GoogleVertexProvider(
                     project_id=settings.GCP_PROJECT_ID,
