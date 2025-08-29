@@ -626,3 +626,4 @@ For issues or questions:
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=vitali87/code-graph-rag&type=Date)](https://www.star-history.com/#vitali87/code-graph-rag&Date)
+
