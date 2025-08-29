@@ -197,10 +197,10 @@ if __name__ == "__main__":
         print("Usage: python -m codebase_rag.graph_loader <graph_file.json>")
         sys.exit(1)
 
-    graph_file = sys.argv[1]
+    graph_file_val = sys.argv[1]
 
     try:
-        graph = load_graph(graph_file)
+        graph = load_graph(graph_file_val)
         summary = graph.summary()
 
         print("Graph Summary:")
