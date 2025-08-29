@@ -609,6 +609,17 @@ The resulting binary will be located in the `dist` directory.
    - Test Ollama API: `curl http://localhost:11434/v1/models`
    - Check Ollama logs: `ollama logs`
 
+4. **Resolving Pre-commit Hook Issues**:
+   If you encounter issues with pre-commit hooks, you can remove them:
+   ```bash
+   # Remove the pre-commit configuration file
+   rm .pre-commit-config.yaml
+   
+   # Check if pre-commit is installed and uninstall hooks if needed
+   pre-commit uninstall  # (if pre-commit is installed)
+   ```
+   The `.git/hooks/` directory contains only sample files by default, which are inactive.
+
 ## 🤝 Contributing
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
