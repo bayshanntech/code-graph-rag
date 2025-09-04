@@ -1,0 +1,8 @@
+model: claude-3-5-sonnet-20241022
+evaluator: claude-3-5-sonnet-20241022
+provider: anthropic
+cache: true
+verbose: true
+confident: true
+write_cache: true
+log_successful_test_cases: true
